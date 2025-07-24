@@ -2,12 +2,13 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import re
-import numpy as np # Needed for NodeFeatureExtractor if redefined locally
+import numpy as np
 
+# Define NodeFeatureExtractor here for a self-contained example.
 class NodeFeatureExtractor:
     """
     A class to extract and preprocess node features from Kilter Board hold data.
-    It takes the default Kilter Holds CSV as input and generates a feature matrix
+    It takes either a DataFrame or a CSV file path as input and generates a feature matrix
     suitable for graph-based machine learning models.
     """
 
@@ -15,32 +16,44 @@ class NodeFeatureExtractor:
     # These should cover all values across ALL your routes
     ALL_CLIMB_HOLD_TYPES = ['unused', 'foot', 'handFoot', 'start', 'finish']
     ALL_CLIMB_HOLD_COLORS = ['black', 'gray', 'red', 'green', 'blue', 'yellow']
+    # If default_role_id also needs fixed categories, define them here:
+    # ALL_DEFAULT_ROLE_IDS = [10, 12, 13, 14, 15] # Example values
 
-    def __init__(self, kilter_holds_csv_path):
+    def __init__(self, climb_holds_df=None, kilter_holds_csv_path=None):
         """
         Initializes the NodeFeatureExtractor by loading the Kilter Holds data
         and performing initial filtering for the Gecko board.
 
         Args:
-            kilter_holds_csv_path (str): The full path to the 'kilterHoldsDefault.csv' file.
+            climb_holds_df (pd.DataFrame, optional): A DataFrame containing climb hold data.
+                                                    If provided, data will be loaded from here.
+            kilter_holds_csv_path (str, optional): The full path to a CSV file containing Kilter Holds data.
+                                                   Used only if climb_holds_df is None.
         """
         self.kilter_holds_csv_path = kilter_holds_csv_path
+        self.climb_holds_df_input = climb_holds_df # Store the input DataFrame
         self.kilter_holds_df = None
         self.gecko_holds_df = None
         self.node_features_dict = {}
         self.node_feature_matrix = None
-        self.node_feature_df = None
+        self.node_feature_df = None # New attribute to store the feature DataFrame
         self._load_and_filter_data()
         self._extract_features()
 
     def _load_and_filter_data(self):
         """
-        Loads the kilter holds data from CSV and filters it to get
+        Loads the kilter holds data from a DataFrame or CSV and filters it to get
         the gecko board specific holds.
         """
         try:
-            self.kilter_holds_df = pd.read_csv(self.kilter_holds_csv_path)
-            print(f"Loaded data from {self.kilter_holds_csv_path}")
+            if self.climb_holds_df_input is not None:
+                self.kilter_holds_df = self.climb_holds_df_input.copy() # Use a copy to avoid modifying original
+                print(f"Loaded data from climbing route dataframe")
+            elif self.kilter_holds_csv_path is not None:
+                self.kilter_holds_df = pd.read_csv(self.kilter_holds_csv_path)
+                print(f"Loaded data from {self.kilter_holds_csv_path}")
+            else:
+                raise ValueError("Either 'climb_holds_df' or 'kilter_holds_csv_path' must be provided.")
 
             # Filter for gecko board specific holds
             self.gecko_holds_df = self.kilter_holds_df[
@@ -75,14 +88,26 @@ class NodeFeatureExtractor:
         print("Normalized 'x' and 'y' coordinates.")
 
         # Ensure categorical columns have predefined categories for consistent one-hot encoding
+        # Apply categories to 'default_hold_color' as well if its values can vary
+        if 'default_hold_color' in self.gecko_holds_df.columns:
+            # Assuming default_hold_color can only be 'black' or 'gray'
+            self.gecko_holds_df['default_hold_color'] = pd.Categorical(
+                self.gecko_holds_df['default_hold_color'], categories=['black', 'gray']
+            )
+
         if 'climb_hold_type' in self.gecko_holds_df.columns:
             self.gecko_holds_df['climb_hold_type'] = pd.Categorical(
                 self.gecko_holds_df['climb_hold_type'], categories=self.ALL_CLIMB_HOLD_TYPES
             )
+        if 'climb_hold_color' in self.gecko_holds_df.columns:
+            self.gecko_holds_df['climb_hold_color'] = pd.Categorical(
+                self.gecko_holds_df['climb_hold_color'], categories=self.ALL_CLIMB_HOLD_COLORS
+            )
 
         # One-hot encode categorical columns
-        categorical_cols_to_encode = ['default_hold_color', 
-                                      'climb_hold_type']
+        categorical_cols_to_encode = [
+            'default_hold_color',
+            'climb_hold_type']
         
         # Ensure that these columns exist before encoding
         existing_categorical_cols = [col for col in categorical_cols_to_encode if col in self.gecko_holds_df.columns]
@@ -105,7 +130,6 @@ class NodeFeatureExtractor:
         self.node_feature_df = self.gecko_holds_df_encoded[feature_columns].copy()
         self.node_feature_matrix = self.gecko_holds_df_encoded[feature_columns].values
         print("Created node feature dataframe and matrix.")
-
 
 
     def get_node_features_dict(self):
