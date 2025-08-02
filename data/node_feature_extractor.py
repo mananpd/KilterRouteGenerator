@@ -158,3 +158,39 @@ class NodeFeatureExtractor:
             pandas.DataFrame: The processed DataFrame.
         """
         return self.gecko_holds_df_encoded
+    
+    def plot_board(self):
+        """
+        Generates a scatter plot of the gecko board with hold colors.
+        """
+        gecko_board = self.node_feature_df.copy()
+
+        if gecko_board is None:
+            print("Cannot plot: Gecko board data not available. Run apply_climb first or ensure data loaded.")
+            return
+        
+        # Initialize a default color for all holds
+        gecko_board['plot_color'] = 'black'
+
+        # Define conditions and choices for np.select
+        conditions = [
+            gecko_board['climb_hold_type_foot'] == True,
+            gecko_board['climb_hold_type_handFoot'] == True,
+            gecko_board['climb_hold_type_start'] == True,
+            gecko_board['climb_hold_type_finish'] == True
+        ]
+        choices = ['yellow', 'blue', 'green', 'red']
+
+        gecko_board['plot_color'] = np.select(conditions, choices, default=gecko_board['plot_color'])
+            
+        plt.figure(figsize=(8, 10)) # Adjust figure size for better aspect ratio
+        # Plot using 'climb_hold_color' for visualization
+        plt.scatter(gecko_board["x_normalized"], gecko_board["y_normalized"], c=gecko_board['plot_color'], s=50, alpha=0.8)
+        plt.xlim(0, 1)
+        plt.ylim(0, 1)
+        plt.xlabel("X Coordinate")
+        plt.ylabel("Y Coordinate")
+        plt.title("Gecko Board Hold Placements")
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.gca().set_aspect('equal', adjustable='box') # Ensure equal aspect ratio
+        plt.show()
